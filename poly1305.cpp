@@ -2,7 +2,7 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
-
+#include <alloca.h>
 namespace Poly1305 {
   typedef uint8_t Key[16];
   typedef uint8_t Acc[17];
@@ -76,19 +76,106 @@ int addmw(uint8_t *x, size_t lx, uint8_t *y, size_t ly, uint8_t *z, size_t lz){
   return 0;
 }
 
+
+uint8_t nlz(uint8_t n){
+  uint8_t masks[] = {0x00, 0x01, 0x03, 0x07, 0x0f, 0x1f, 0x3f, 0x7f, 0xff};
+  int i = 0;
+  for(i = 0; i < 8 &&  (n & masks[i]) != n ; i++);
+  return 8-i;
+}
+
+// Assume x > y
+int submw(uint8_t *x, size_t lx, uint8_t *y, size_t ly, uint8_t *z, size_t lz){
+
+  // temporary x to borrow from
+  uint8_t *t = (uint8_t*) alloca(lx);
+  for(int i = 0; i < lx; i++) t[i] = x[i];
+  for(int i = 0; i < lz; i++) z[i] = 0;
+
+  
+  for(int i = lx-1; i >= 0 ; i--){
+    printf("i=%d, t[i] = %02x\n", i, t[i]);
+    // z[i] = x[i] - y[i]
+    // if x[i] < y[i], then borrow
+    uint16_t k = t[i];
+    
+    if(t[i] < y[i]) {
+      //borrow
+      bool gotit = false;
+      for(int j = i; j > 0 && !gotit; j--){
+	if(t[j-1] > 0x00) {
+	  t[j-1] -= 1;
+	  gotit = true;
+	  printf("borrowed from position %d\n", j-1);
+	}
+	t[j] = 0xff;
+	
+      }
+      k+= 0x100;
+      printf("t is ");
+      hexdump(t, lx);
+    }
+    
+    z[i] = k - y[i];
+
+  }
+}
+
+
+// Assume a > b
+int f(uint8_t *a, size_t la, uint8_t *b, size_t lb, uint8_t *q, size_t lq){
+  size_t d, dp;
+  int i;
+  for(i = 0; i < la && (a[i] == 0); i++);
+  d = i;
+  dp = nlz(a[i]);
+  printf("a has %d*8+%d leading zeros\n", d, dp);
+
+  
+  
+  return 0;
+}
+
+
+
 int main(){
 
-  uint8_t x[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xFF};
-  uint8_t y[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
-  uint8_t z[32];
+  uint8_t x[16] = {0,    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    0xff, 0xFF};
+  uint8_t y[16] = {0,    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    0xff, 0xff};
+  uint8_t k[16] = {0   , 0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x11, 0x22, 0x33};
+  uint8_t j[16] = {0   , 0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    0x0f, 0xff};
+  uint8_t a[16] = {0   , 0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x12, 0x01, 0x00, 0x23};
+  uint8_t b[16] = {0   , 0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    0xff, 0x01};
+  uint8_t c[16] = {0   , 0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    0x00, 0x01};
+  uint8_t d[16] = {0x80   , 0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    0x00, 0x00};
 
+  uint8_t z[32];
+  uint8_t zz[32];
+
+  /*
   mulmw(x, y, z);
   hexdump(z, 32);
 
   addmw(x, 16, y, 16, z, 32);
   hexdump(z, 32);
 
+  printf("nlz(%08b) = %d\n", 0x01, nlz(0x01));
+  printf("nlz(%08b) = %d\n", 0x02, nlz(0x02));
+  printf("nlz(%08b) = %d\n", 0x04, nlz(0x04));
+  */
+  for(int i = 0; i < 32; i++) z[i] = 0, zz[i] = 0;
 
+  submw(a, 16, b, 16, z, 16);
+  
+  // k / j  = z mod zz
+  //f(k, 16, j, 16, z, 32);
+  
+  hexdump(z, 32);
+  //hexdump(zz, 32);
+  submw(d, 16, c, 16, z, 16);
+  hexdump(z, 32);
+
+  
   return 0;
 
 
